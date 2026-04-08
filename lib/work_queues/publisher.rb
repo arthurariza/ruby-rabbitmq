@@ -4,17 +4,28 @@ require './lib/rabbitmq/connection'
 require './lib/rabbitmq/constants'
 
 module WorkQueues
-  class Publisher < RabbitMQ::Connection
-    def publish(message)
-      # routing_key: routes the message to the queue matching the queue name — when using the
-      # default exchange, messages are delivered to the queue whose name equals the routing key.
-      # persistent: marks the message as durable so RabbitMQ writes it to disk; combined with
-      # a durable queue, this ensures messages survive a broker restart.
-      channel.default_exchange.publish(message, routing_key: queue.name, persistent: true)
-      puts " [x] Sent #{message}"
-
-      close_connection
+  class Publisher
+    def initialize(queue_name:, connection: RabbitMQ::Connection.new)
+      @queue_name = queue_name
+      @connection = connection
     end
+
+    def publish(message)
+      connection.connect do
+        channel = connection.make_channel
+        queue = channel.create_quorum_queue(queue_name)
+
+        # routing_key: routes the message to the queue matching the queue name — when using the
+        # persistent: marks the message as durable so RabbitMQ writes it to disk; combined with
+        # a durable queue, this ensures messages survive a broker restart.
+        channel.default_exchange.publish(message, routing_key: queue.name, persistent: true)
+        puts " [x] Sent #{message}"
+      end
+    end
+
+    private
+
+    attr_reader :connection, :queue_name
   end
 end
 
